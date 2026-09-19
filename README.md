@@ -81,6 +81,21 @@ the other a tuple, and both passed. That's exactly why the graders match on
 substrings and numeric tolerance rather than exact equality: the question was
 answered correctly either way.
 
+### Limits of this eval
+
+Worth stating plainly, because 10/10 reads stronger than it is:
+
+- The data, the questions and the prompt were written together, so nothing here
+  independently checks the assumptions behind them.
+- Every case passed on both models. A suite nothing fails can't separate a good
+  build from a worse one — a useful eval has cases near the edge.
+- The repair loop has never fired in a recorded run, so that path is unproven.
+- The data is synthetic and clean: no missing values, no mixed date formats, no
+  duplicate spellings of the same label, and no questions the tool should refuse.
+
+The next version should use a real, messy export, with questions written by
+someone other than whoever built the agent.
+
 ### How each case is defined
 
 Each case declares four things:
@@ -159,6 +174,23 @@ guardrail, not a sandbox, and it should not be treated as one. For anything
 handling untrusted input, run it in a container or use the Claude API's
 server-side code execution tool instead.
 
+## Notes
+
+What I took from building this:
+
+- The loop is the easy half. The eval is what makes the thing trustworthy, and
+  it's where the judgment calls are.
+- Expected answers have to be produced independently of the model being tested,
+  or the suite just grades the model against itself. That's what `--self-check`
+  is for, and it caught a real mismatch during the build.
+- A question with two defensible answers can't be graded at all. "Total revenue"
+  is one number with returned orders and another without, so the question has to
+  say which it wants.
+- Graders should absorb formatting differences and still reject arithmetic
+  errors. Opus returned one answer as a dict and Sonnet as a tuple, and both were
+  right.
+- A pass rate is only as good as whoever wrote the questions — see Limits above.
+
 ## Files
 
 ```
@@ -166,4 +198,7 @@ csv_agent.py        the agent: describe -> generate -> execute -> repair
 test_agent.py       10 fixed cases, graders, and the self-check
 data/make_data.py   seeded generator for the sample CSV
 data/sales.csv      400 synthetic orders
+requirements.txt    anthropic, pandas, numpy
 ```
+
+MIT licensed.
