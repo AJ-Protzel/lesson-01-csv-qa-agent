@@ -54,7 +54,9 @@ environment, since a key there would make Claude Code bill the API instead.
 
 Uses `claude-opus-5` with adaptive thinking at `effort=low` — these are one-line
 groupbys, and low effort keeps a full test run cheap. `--effort high` if you're
-pointing it at something gnarlier.
+pointing it at something gnarlier. `--model claude-sonnet-5` runs the same code on
+a cheaper model; Haiku 4.5 won't work on the `api` backend, because it rejects
+the adaptive-thinking and effort settings.
 
 ## The test suite
 
