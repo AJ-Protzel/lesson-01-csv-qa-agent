@@ -46,7 +46,9 @@ environment, since a key there would make Claude Code bill the API instead.
    an empty frame.
 2. **Ask for code, not an answer.** The model gets the schema and the question
    and must reply with a single fenced python block that assigns to `result`.
-   It never sees the row data, so it can't "answer" from memory — it has to compute.
+   It sees 3 sample rows and the value lists, never the other 397, so it can't
+   "answer" from the data — the arithmetic has to happen in pandas. That's also
+   what lets the same design work on a file too large to fit in a prompt.
 3. **Run it locally** against a copy of the DataFrame.
 4. **Repair on failure.** Exception, banned construct, or a missing `result`
    all get handed back to the model as a repair prompt, up to 3 attempts total.
