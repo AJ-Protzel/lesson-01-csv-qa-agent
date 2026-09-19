@@ -63,6 +63,26 @@ the adaptive-thinking and effort settings.
 Ten fixed questions with known answers. `python test_agent.py` runs each one
 through the real agent and prints a pass/fail table.
 
+### Results
+
+Two full runs, 2026-09-19, `--backend cli` at `effort=low`:
+
+| model | passed | cases needing a repair attempt |
+|---|---|---|
+| `claude-opus-5` | 10/10 | 0 |
+| `claude-sonnet-5` | 10/10 | 0 |
+
+Both models answered every case correctly on the first attempt, so these runs
+never exercised the repair loop — it's there for the failure path, not proven by
+this table.
+
+The two models formatted `biggest-order` differently, one returning a dict and
+the other a tuple, and both passed. That's exactly why the graders match on
+substrings and numeric tolerance rather than exact equality: the question was
+answered correctly either way.
+
+### How each case is defined
+
 Each case declares four things:
 
 | field | purpose |
