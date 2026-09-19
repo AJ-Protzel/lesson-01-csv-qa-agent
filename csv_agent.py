@@ -5,16 +5,23 @@ it produces is the answer.
 
     python csv_agent.py data/sales.csv "which category had the highest sales in March"
 
-Set ANTHROPIC_API_KEY first (or run `ant auth login`).
+Two backends reach the same model with the same prompt:
+
+    --backend api   Anthropic API; needs ANTHROPIC_API_KEY (default)
+    --backend cli   `claude -p`; runs on a logged-in Claude Code subscription
 """
 from __future__ import annotations
 
 import argparse
 import io
+import os
 import re
+import shutil
+import subprocess
 import sys
 import traceback
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -133,18 +140,82 @@ def format_answer(value) -> str:
     return str(value)
 
 
+def call_api(messages: list[dict], model: str, effort: str) -> str:
+    """One turn through the Anthropic API. Bills API credits."""
+    import anthropic
+
+    response = anthropic.Anthropic().messages.create(
+        model=model,
+        max_tokens=4000,
+        system=SYSTEM,
+        messages=messages,
+        thinking={"type": "adaptive"},
+        output_config={"effort": effort},
+    )
+    if response.stop_reason == "refusal":
+        raise RuntimeError("the model declined to answer this request")
+    return "".join(b.text for b in response.content if b.type == "text")
+
+
+def find_claude() -> str:
+    """Locate the Claude Code executable, which the installer may leave off PATH."""
+    found = shutil.which("claude")
+    if found:
+        return found
+    fallback = Path.home() / ".local" / "bin" / ("claude.exe" if os.name == "nt" else "claude")
+    if fallback.exists():
+        return str(fallback)
+    raise RuntimeError("Claude Code not found; install it or use --backend api")
+
+
+def call_cli(messages: list[dict], model: str, effort: str) -> str:
+    """One turn through `claude -p`. Runs on the Claude Code subscription.
+
+    Each `claude -p` call starts fresh, so a repair turn replays the earlier
+    exchange as a single prompt. `--tools ""` leaves the model no tools at all:
+    it can only reply with text, never touch files.
+    """
+    if len(messages) == 1:
+        prompt = messages[0]["content"]
+    else:
+        prompt = "\n\n".join(f"[{m['role']}]\n{m['content']}" for m in messages)
+
+    # A key in the environment would make Claude Code bill the API instead.
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    proc = subprocess.run(
+        [
+            find_claude(), "-p",
+            "--system-prompt", SYSTEM,
+            "--model", model,
+            "--effort", effort,
+            "--tools", "",
+            "--no-session-persistence",
+        ],
+        input=prompt,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+        timeout=300,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude -p exited {proc.returncode}: {proc.stderr.strip()[-300:]}")
+    return proc.stdout
+
+
+BACKENDS = {"api": call_api, "cli": call_cli}
+
+
 def ask(
     df: pd.DataFrame,
     question: str,
-    client=None,
+    backend: str = "api",
     model: str = MODEL,
     effort: str = "low",
     verbose: bool = False,
 ) -> AgentResult:
     """Answer one question. Retries with the traceback when the code fails."""
-    import anthropic
-
-    client = client or anthropic.Anthropic()
+    call = BACKENDS[backend]
     out = AgentResult(question=question)
     messages: list[dict] = [
         {
@@ -155,19 +226,12 @@ def ask(
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         out.attempts = attempt
-        response = client.messages.create(
-            model=model,
-            max_tokens=4000,
-            system=SYSTEM,
-            messages=messages,
-            thinking={"type": "adaptive"},
-            output_config={"effort": effort},
-        )
-        if response.stop_reason == "refusal":
-            out.error = "the model declined to answer this request"
+        try:
+            reply = call(messages, model, effort)
+        except Exception as exc:
+            out.error = str(exc)
             return out
 
-        reply = "".join(b.text for b in response.content if b.type == "text")
         code = extract_code(reply)
         out.code = code
         out.transcript.append(code)
@@ -200,6 +264,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("csv", help="path to the CSV file")
     parser.add_argument("question", help="question to ask, in plain English")
+    parser.add_argument("--backend", default="api", choices=list(BACKENDS),
+                        help="api: API credits (default); cli: Claude Code subscription")
     parser.add_argument("--model", default=MODEL)
     parser.add_argument(
         "--effort",
@@ -211,7 +277,8 @@ def main() -> int:
     args = parser.parse_args()
 
     df = load_csv(args.csv)
-    result = ask(df, args.question, model=args.model, effort=args.effort, verbose=args.show_code)
+    result = ask(df, args.question, backend=args.backend, model=args.model,
+                 effort=args.effort, verbose=args.show_code)
 
     if not result.ok:
         print(f"failed after {result.attempts} attempt(s): {result.error}", file=sys.stderr)

@@ -22,8 +22,18 @@ a fixed regression suite that grades it.
 
 ```bash
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...     # or run: ant auth login
 ```
+
+Two backends reach the same model with the same prompt, retry loop, and output:
+
+| backend | how it calls Claude | needs |
+|---|---|---|
+| `--backend api` (default) | Anthropic API via the Python SDK | `ANTHROPIC_API_KEY` set; bills API credits |
+| `--backend cli` | `claude -p`, Claude Code's scripting mode | Claude Code installed and logged in; uses the subscription |
+
+The `cli` backend runs with `--tools ""`, so Claude Code has no tools and can
+only reply with text. It also strips `ANTHROPIC_API_KEY` from the child
+environment, since a key there would make Claude Code bill the API instead.
 
 ## How the agent works
 

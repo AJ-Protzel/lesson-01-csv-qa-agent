@@ -197,13 +197,14 @@ def list_cases() -> int:
     return 0
 
 
-def run(df: pd.DataFrame, cases: list[Case], effort: str, show_code: bool) -> int:
+def run(df: pd.DataFrame, cases: list[Case], backend: str, effort: str, show_code: bool) -> int:
     passed = 0
     rows = []
+    print(f"backend: {backend}   model: {csv_agent.MODEL}   effort: {effort}\n")
 
     for i, case in enumerate(cases, 1):
         print(f"[{i}/{len(cases)}] {case.id} ... ", end="", flush=True)
-        result = csv_agent.ask(df, case.question, effort=effort, verbose=show_code)
+        result = csv_agent.ask(df, case.question, backend=backend, effort=effort, verbose=show_code)
 
         if not result.ok:
             verdict, got = "ERROR", result.error.splitlines()[-1][:60]
@@ -231,6 +232,8 @@ def main() -> int:
                         help="verify expected values against the CSV, no API calls")
     parser.add_argument("--list", action="store_true", help="print the suite and exit")
     parser.add_argument("-k", metavar="SUBSTR", help="only run cases whose id matches")
+    parser.add_argument("--backend", default="api", choices=list(csv_agent.BACKENDS),
+                        help="api: API credits (default); cli: Claude Code subscription")
     parser.add_argument("--effort", default="low",
                         choices=["low", "medium", "high", "xhigh", "max"])
     parser.add_argument("--show-code", action="store_true", help="print generated pandas")
@@ -247,7 +250,7 @@ def main() -> int:
     if not cases:
         print(f"no cases match {args.k!r}", file=sys.stderr)
         return 1
-    return run(df, cases, args.effort, args.show_code)
+    return run(df, cases, args.backend, args.effort, args.show_code)
 
 
 if __name__ == "__main__":
