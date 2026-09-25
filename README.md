@@ -1,4 +1,4 @@
-# csv-qa-agent
+# lesson-01-csv-qa-agent
 
 Ask a CSV questions in plain English. Claude writes the pandas, the code runs
 locally, and the value it produces is the answer.
